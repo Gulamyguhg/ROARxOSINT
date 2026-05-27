@@ -1,5 +1,3 @@
-{
-  "returncode" : 0,
-  "stdout" : "Done\n",
-  "stderr" : ""
-}
+python-telegram-bot
+requests
+

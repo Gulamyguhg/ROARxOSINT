@@ -33,7 +33,7 @@ from telegram.ext import (
 #  CONFIG — Yahan apna data daalo
 # ─────────────────────────────────────────────
 TOKEN = "8750048508:AAFMCAgD6U9JZSWnMG7jheylZ3f6DTALh2g"          # BotFather se liya hua token
-ADMIN_ID = /connect -1001235155926                   # Apna Telegram numeric ID
+ADMIN_ID = 1738877717                   # Apna Telegram numeric ID
 UPI_ID = "roarshadow@upi"               # Payment ke liye UPI ID
 PREMIUM_PRICE = "₹99"                  # Premium ki price
 

@@ -7,7 +7,7 @@ import time
 BOT_TOKEN = os.environ.get("8895631051: AAG93LsbEz
 PwJ8mb4NkHWcØNFNBKjK-
 z05g")
-API_URL = os.environ.get("apis-
+API_URL = os.environ.get("https://nitin-apis-
 the-best.vercel.app/ api")
 
 if not BOT_TOKEN or not API_URL:

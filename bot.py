@@ -4,8 +4,11 @@ import json
 import time
 
 # ---------- Environment Variables (set these in your hosting platform) ----------
-BOT_TOKEN = os.environ.get("BOT_TOKEN")
-API_URL = os.environ.get("API_URL")
+BOT_TOKEN = os.environ.get("8895631051: AAG93LsbEz
+PwJ8mb4NkHWcØNFNBKjK-
+z05g")
+API_URL = os.environ.get("apis-
+the-best.vercel.app/ api")
 
 if not BOT_TOKEN or not API_URL:
     raise ValueError("BOT_TOKEN and API_URL must be set in environment variables.")

@@ -1,119 +1,353 @@
-import os
 import requests
 import json
 import time
-import sys
 
-# ---------- Environment Variables ----------
-BOT_TOKEN = os.environ.get("BOT_TOKEN")
-API_URL = os.environ.get("API_URL")
+# ==========================================
+# CONFIGURATION
+# ==========================================
 
-if not BOT_TOKEN or not API_URL:
-    raise ValueError("BOT_TOKEN and API_URL must be set in environment variables.")
+BOT_TOKEN = "8895631051:AAG93LsbEzPwJ8mb4NkHWc0NFNBKjK-zO5g"
 
-TELEGRAM_API = f"https://api.telegram.org/bot{BOT_TOKEN}"
+PHONE_API_URL = "https://exploitsindia.site/osintanishexploits/api.php?key=SATVIRxSHUBHAM&type=number&num=9955878039"
+AADHAAR_API_URL = "exploitsindia.site/osintanishexploits/api.php?key=SHUBHxANISH&type=aadhaar&aadhaar=962397300673"
 
-def get_updates(offset=None):
-    url = f"{TELEGRAM_API}/getUpdates"
-    params = {"timeout": 30, "offset": offset} if offset else {"timeout": 30}
-    try:
-        response = requests.get(url, params=params, timeout=35)
-        response.raise_for_status()
-        return response.json()
-    except Exception as e:
-        print(f"[ERROR] get_updates: {e}")
-        return None
+# Dummy HTTPS server URL
+DUMMY_HTTPS_SERVER = ""
 
-def send_message(chat_id, text, reply_markup=None):
-    url = f"{TELEGRAM_API}/sendMessage"
-    payload = {
+TELEGRAM_API = "https://api.telegram.org/bot" + BOT_TOKEN
+
+
+# ==========================================
+# TELEGRAM API
+# ==========================================
+
+def send_message(chat_id, text, keyboard=None):
+    url = TELEGRAM_API + "/sendMessage"
+
+    data = {
         "chat_id": chat_id,
         "text": text,
         "parse_mode": "HTML"
     }
-    if reply_markup:
-        payload["reply_markup"] = json.dumps(reply_markup)
-    try:
-        response = requests.post(url, json=payload, timeout=15)
-        response.raise_for_status()
-        return response.json()
-    except Exception as e:
-        print(f"[ERROR] send_message: {e}")
-        return None
 
-def build_keyboard():
-    return {
-        "keyboard": [[{"text": "📱 Phone Lookup"}]],
-        "resize_keyboard": True,
-        "one_time_keyboard": False
+    if keyboard is not None:
+        data["reply_markup"] = json.dumps(keyboard)
+
+    try:
+        requests.post(
+            url,
+            data=data,
+            timeout=15
+        )
+    except requests.RequestException:
+        pass
+
+
+def get_updates(offset):
+    url = TELEGRAM_API + "/getUpdates"
+
+    params = {
+        "offset": offset,
+        "timeout": 25
     }
 
-def is_valid_number(text):
-    return text.isdigit() and len(text) == 10
-
-def lookup_phone(number):
     try:
-        url = f"{API_URL}?type=number&mobile={number}"
-        print(f"[INFO] Calling API: {url}")
-        response = requests.get(url, timeout=20)
-        print(f"[INFO] API status: {response.status_code}")
-        if response.status_code != 200:
-            return {"error": f"API returned status {response.status_code}"}
-        # Try to parse JSON
+        response = requests.get(
+            url,
+            params=params,
+            timeout=30
+        )
+
+        return response.json()
+
+    except (requests.RequestException, ValueError):
+        return {
+            "ok": False,
+            "result": []
+        }
+
+
+# ==========================================
+# KEYBOARD
+# ==========================================
+
+MAIN_KEYBOARD = {
+    "keyboard": [
+        [
+            {
+                "text": "📱 Phone Lookup"
+            }
+        ],
+        [
+            {
+                "text": "🪪 Aadhaar Verification"
+            }
+        ]
+    ],
+    "resize_keyboard": True,
+    "one_time_keyboard": False
+}
+
+
+# ==========================================
+# PHONE API
+# ==========================================
+
+def phone_lookup(number):
+
+    if not PHONE_API_URL:
+        return {
+            "success": False,
+            "error": "Phone verification API is not configured."
+        }
+
+    try:
+        response = requests.get(
+            PHONE_API_URL,
+            params={
+                "phone": number
+            },
+            timeout=20
+        )
+
         try:
-            data = response.json()
-        except json.JSONDecodeError as je:
-            return {"error": f"Invalid JSON from API: {response.text[:200]}"}
-        return data
-    except requests.exceptions.Timeout:
-        return {"error": "API request timed out."}
-    except requests.exceptions.RequestException as e:
-        return {"error": f"API request failed: {e}"}
-    except Exception as e:
-        return {"error": f"Unexpected error: {e}"}
+            return response.json()
+
+        except ValueError:
+            return {
+                "success": False,
+                "error": "API did not return valid JSON."
+            }
+
+    except requests.RequestException as error:
+        return {
+            "success": False,
+            "error": "API request failed.",
+            "details": str(error)
+        }
+
+
+# ==========================================
+# AADHAAR VERIFICATION API
+# ==========================================
+
+def aadhaar_verify(aadhaar):
+
+    if not AADHAAR_API_URL:
+        return {
+            "success": False,
+            "error": "Authorized Aadhaar verification API is not configured."
+        }
+
+    try:
+        response = requests.get(
+            AADHAAR_API_URL,
+            params={
+                "aadhaar": aadhaar
+            },
+            timeout=20
+        )
+
+        try:
+            return response.json()
+
+        except ValueError:
+            return {
+                "success": False,
+                "error": "API did not return valid JSON."
+            }
+
+    except requests.RequestException as error:
+        return {
+            "success": False,
+            "error": "Verification request failed.",
+            "details": str(error)
+        }
+
+
+# ==========================================
+# JSON FORMATTER
+# ==========================================
+
+def format_json(data):
+
+    formatted = json.dumps(
+        data,
+        indent=4,
+        ensure_ascii=False
+    )
+
+    # Telegram HTML safety
+    formatted = (
+        formatted
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
+
+    return "<pre>" + formatted + "</pre>"
+
+
+# ==========================================
+# MAIN BOT
+# ==========================================
 
 def main():
-    print("Bot started. Polling for updates...")
-    last_update_id = 0
+
+    offset = 0
+    mode = {}
+
+    print("Bot started...")
+
     while True:
-        try:
-            updates = get_updates(offset=last_update_id + 1 if last_update_id else None)
-            if not updates or not updates.get("ok"):
-                time.sleep(1)
+
+        updates = get_updates(offset)
+
+        if not updates.get("ok"):
+            time.sleep(2)
+            continue
+
+        for update in updates.get("result", []):
+
+            offset = update["update_id"] + 1
+
+            message = update.get("message")
+
+            if not message:
                 continue
 
-            for update in updates.get("result", []):
-                last_update_id = update["update_id"]
-                if "message" not in update:
-                    continue
-                message = update["message"]
-                chat_id = message["chat"]["id"]
-                text = message.get("text", "")
+            chat_id = message["chat"]["id"]
 
-                # ----- /start -----
-                if text == "/start":
-                    welcome = "👋 Welcome to the Phone Lookup Bot!\nUse the button below to look up any mobile number."
-                    send_message(chat_id, welcome, reply_markup=build_keyboard())
+            text = message.get("text", "").strip()
+
+            # ==================================
+            # /start
+            # ==================================
+
+            if text == "/start":
+
+                mode[chat_id] = None
+
+                send_message(
+                    chat_id,
+                    "👋 <b>Welcome!</b>\n\n"
+                    "Select an option below:",
+                    MAIN_KEYBOARD
+                )
+
+                continue
+
+            # ==================================
+            # PHONE BUTTON
+            # ==================================
+
+            if text == "📱 Phone Lookup":
+
+                mode[chat_id] = "phone"
+
+                send_message(
+                    chat_id,
+                    "📞 Send 10 digit mobile number:"
+                )
+
+                continue
+
+            # ==================================
+            # AADHAAR BUTTON
+            # ==================================
+
+            if text == "🪪 Aadhaar Verification":
+
+                mode[chat_id] = "aadhaar"
+
+                send_message(
+                    chat_id,
+                    "🪪 Send 12 digit Aadhaar number for "
+                    "authorized verification:"
+                )
+
+                continue
+
+            # ==================================
+            # PHONE MODE
+            # ==================================
+
+            if mode.get(chat_id) == "phone":
+
+                if not text.isdigit() or len(text) != 10:
+
+                    send_message(
+                        chat_id,
+                        "❌ <b>Invalid mobile number.</b>\n\n"
+                        "Please send exactly 10 numeric digits."
+                    )
+
                     continue
 
-                # ----- Phone Lookup button -----
-                if text == "📱 Phone Lookup":
-                    send_message(chat_id, "📞 Send 10 digit mobile number:")
+                send_message(
+                    chat_id,
+                    "⏳ Processing..."
+                )
+
+                result = phone_lookup(text)
+
+                send_message(
+                    chat_id,
+                    format_json(result)
+                )
+
+                mode[chat_id] = None
+
+                continue
+
+            # ==================================
+            # AADHAAR MODE
+            # ==================================
+
+            if mode.get(chat_id) == "aadhaar":
+
+                if not text.isdigit() or len(text) != 12:
+
+                    send_message(
+                        chat_id,
+                        "❌ <b>Invalid Aadhaar format.</b>\n\n"
+                        "Please enter exactly 12 numeric digits."
+                    )
+
                     continue
 
-                # ----- 10-digit number -----
-                if is_valid_number(text):
-                    result = lookup_phone(text)
-                    formatted = json.dumps(result, indent=2, ensure_ascii=False)
-                    # Send the formatted JSON inside <pre> tag
-                    send_message(chat_id, f"<pre>{formatted}</pre>")
-                else:
-                    send_message(chat_id, "❌ Invalid input. Please send exactly 10 digits (numbers only).")
-            time.sleep(1)
-        except Exception as main_error:
-            # Catch any unexpected error in the main loop to prevent crash
-            print(f"[FATAL] Main loop error: {main_error}")
-            time.sleep(5)  # wait and continue
+                send_message(
+                    chat_id,
+                    "⏳ Verifying..."
+                )
+
+                result = aadhaar_verify(text)
+
+                send_message(
+                    chat_id,
+                    format_json(result)
+                )
+
+                mode[chat_id] = None
+
+                continue
+
+            # ==================================
+            # UNKNOWN MESSAGE
+            # ==================================
+
+            send_message(
+                chat_id,
+                "❓ Please use /start and select an option.",
+                MAIN_KEYBOARD
+            )
+
+        time.sleep(1)
+
+
+# ==========================================
+# START
+# ==========================================
 
 if __name__ == "__main__":
     main()

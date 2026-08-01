@@ -8,7 +8,7 @@ import time
 
 BOT_TOKEN = "8895631051:AAG93LsbEzPwJ8mb4NkHWc0NFNBKjK-zO5g"
 
-PHONE_API_URL = "https://exploitsindia.site/osintanishexploits/api.php?key=SATVIRxSHUBHAM&type=number&num=9955878039"
+PHONE_API_URL = "http://uersxinfo.in/api?key=demoapi&type=veh_all_info&term=uk04ag9781"
 AADHAAR_API_URL = "exploitsindia.site/osintanishexploits/api.php?key=SHUBHxANISH&type=aadhaar&aadhaar=962397300673"
 
 # Dummy HTTPS server URL

@@ -5,34 +5,28 @@ import requests
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ConversationHandler, ContextTypes
 
-# ========== READ FROM RAILWAY VARIABLES ==========
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+# ========== READ FROM ENVIRONMENT VARIABLES (FIXED .strip()) ==========
+BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()   # <-- YAHAN .strip() ADD KIYA
 if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN environment variable missing!")
 
-# API Base URLs (in case not set, use your provided ones)
 API_BASE = os.getenv("API_URL", "https://bronx-web-api.onrender.com/api/key-bronx")
 TG_API_URL = os.getenv("TG_API_URL", "https://bronx-web-api.onrender.com/api/custom/telegram-scan")
 
-# API Keys – with fallback to your sample keys (replace if expired)
-PHONE_KEY = os.getenv("PHONE_KEY", "tg-99")
-AADHAAR_KEY = os.getenv("AADHAAR_KEY", "KEY")
-VEHICLE_KEY = os.getenv("VEHICLE_KEY", "tg-99")
-TG_KEY = os.getenv("TG_KEY", "tg-99")
+PHONE_KEY = os.getenv("PHONE_KEY", "tg-99").strip()
+AADHAAR_KEY = os.getenv("AADHAAR_KEY", "KEY").strip()
+VEHICLE_KEY = os.getenv("VEHICLE_KEY", "tg-99").strip()
+TG_KEY = os.getenv("TG_KEY", "tg-99").strip()
 
-# Build full endpoints
 PHONE_API = f"{API_BASE}/numleak"
 AADHAAR_API = f"{API_BASE}/aadhar"
 VEHICLE_API = f"{API_BASE}/veh2num"
 
-# Conversation states
 PHONE, AADHAAR, VEHICLE, TG_USERNAME = range(4)
 
-# ========== LOGGING ==========
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# ========== API CALLERS ==========
 def call_api(url, params):
     try:
         resp = requests.get(url, params=params, timeout=20)
@@ -57,7 +51,6 @@ def vehicle_lookup(vehicle):
 def telegram_lookup(username):
     return call_api(TG_API_URL, {"key": TG_KEY, "id": username})
 
-# ========== FORMAT RESULTS ==========
 def format_result(data, title):
     if not data.get("success", False):
         error = data.get("error", "Unknown error")
@@ -65,7 +58,6 @@ def format_result(data, title):
     result = data.get("data", data)
     return f"✅ {title} result:\n```json\n{json.dumps(result, indent=2)}\n```"
 
-# ========== BOT HANDLERS ==========
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         ["📱 Phone Lookup", "🆔 Aadhaar Verification"],

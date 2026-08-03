@@ -12,18 +12,18 @@ from telegram.ext import (
     ContextTypes,
 )
 
-# ========== READ FROM ENVIRONMENT ==========
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+# ========== READ FROM ENVIRONMENT (WITH .strip() TO REMOVE SPACES/NEWLINES) ==========
+BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
 if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN not set")
 
-API_BASE = os.getenv("API_URL", "https://bronx-web-api.onrender.com/api/key-bronx")
-TG_API_URL = os.getenv("TG_API_URL", "https://bronx-web-api.onrender.com/api/custom/telegram-scan")
+API_BASE = os.getenv("API_URL", "https://bronx-web-api.onrender.com/api/key-bronx").strip()
+TG_API_URL = os.getenv("TG_API_URL", "https://bronx-web-api.onrender.com/api/custom/telegram-scan").strip()
 
-PHONE_KEY = os.getenv("PHONE_KEY", "tg-99")
-AADHAAR_KEY = os.getenv("AADHAAR_KEY", "KEY")
-VEHICLE_KEY = os.getenv("VEHICLE_KEY", "tg-99")
-TG_KEY = os.getenv("TG_KEY", "tg-99")
+PHONE_KEY = os.getenv("PHONE_KEY", "tg-99").strip()
+AADHAAR_KEY = os.getenv("AADHAAR_KEY", "KEY").strip()
+VEHICLE_KEY = os.getenv("VEHICLE_KEY", "tg-99").strip()
+TG_KEY = os.getenv("TG_KEY", "tg-99").strip()
 
 PHONE_API = f"{API_BASE}/numleak"
 AADHAAR_API = f"{API_BASE}/aadhar"

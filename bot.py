@@ -1,9 +1,16 @@
-import os
 import logging
+import os
 import json
 import requests
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ConversationHandler, ContextTypes
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    MessageHandler,
+    filters,
+    ConversationHandler,
+    ContextTypes,
+)
 
 # ========== READ FROM ENVIRONMENT ==========
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -22,7 +29,7 @@ PHONE_API = f"{API_BASE}/numleak"
 AADHAAR_API = f"{API_BASE}/aadhar"
 VEHICLE_API = f"{API_BASE}/veh2num"
 
-PHONE, AADHAAR, VEHICLE, TG_USERNAME = range(4)
+SELECTING_ACTION, PHONE, AADHAAR, VEHICLE, TG_USERNAME = range(5)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -34,7 +41,7 @@ def call_api(url, params):
             return {"success": False, "error": f"HTTP {resp.status_code}", "body": resp.text}
         try:
             return resp.json()
-        except:
+        except Exception:
             return {"success": False, "error": "Invalid JSON", "body": resp.text}
     except Exception as e:
         return {"success": False, "error": str(e)}
@@ -67,7 +74,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Welcome! Choose an option:",
         reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     )
-    return ConversationHandler.END
+    return SELECTING_ACTION
 
 async def menu_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
@@ -75,7 +82,7 @@ async def menu_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("📱 Send 10-digit number:")
         return PHONE
     elif "Aadhaar" in text:
-        await update.message.reply_text("🆔 Send 12-digit Aadhaar:")
+        await update.message.reply_text("🆔 Send 12-digit number:")
         return AADHAAR
     elif "Vehicle" in text:
         await update.message.reply_text("🚗 Send vehicle number (e.g. KL41V3504):")
@@ -83,12 +90,14 @@ async def menu_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif "Telegram" in text:
         await update.message.reply_text("📡 Send username (without @):")
         return TG_USERNAME
-    return ConversationHandler.END
+    else:
+        await update.message.reply_text("❌ Please select a valid option from the menu.")
+        return SELECTING_ACTION
 
 async def handle_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     num = update.message.text.strip()
     if not num.isdigit() or len(num) != 10:
-        await update.message.reply_text("❌ Invalid 10-digit number.")
+        await update.message.reply_text("❌ Invalid 10-digit number. Try again:")
         return PHONE
     await update.message.reply_text("⏳ Processing...")
     result = phone_lookup(num)
@@ -98,7 +107,7 @@ async def handle_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_aadhaar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     num = update.message.text.strip()
     if not num.isdigit() or len(num) != 12:
-        await update.message.reply_text("❌ Invalid 12-digit Aadhaar.")
+        await update.message.reply_text("❌ Invalid 12-digit number. Try again:")
         return AADHAAR
     await update.message.reply_text("⏳ Processing...")
     result = aadhaar_lookup(num)
@@ -108,7 +117,7 @@ async def handle_aadhaar(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_vehicle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     veh = update.message.text.strip()
     if len(veh) < 4:
-        await update.message.reply_text("❌ Invalid vehicle number.")
+        await update.message.reply_text("❌ Invalid vehicle number. Try again:")
         return VEHICLE
     await update.message.reply_text("⏳ Processing...")
     result = vehicle_lookup(veh)
@@ -118,7 +127,7 @@ async def handle_vehicle(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_tg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = update.message.text.strip().lstrip('@')
     if not username:
-        await update.message.reply_text("❌ Invalid username.")
+        await update.message.reply_text("❌ Invalid username. Try again:")
         return TG_USERNAME
     await update.message.reply_text("⏳ Processing...")
     result = telegram_lookup(username)
@@ -131,9 +140,11 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
-    conv = ConversationHandler(
+    
+    conv_handler = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
         states={
+            SELECTING_ACTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, menu_selection)],
             PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_phone)],
             AADHAAR: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_aadhaar)],
             VEHICLE: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_vehicle)],
@@ -141,8 +152,8 @@ def main():
         },
         fallbacks=[CommandHandler("cancel", cancel)],
     )
-    app.add_handler(conv)
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_selection))
+    
+    app.add_handler(conv_handler)
     logger.info("Bot is running...")
     app.run_polling()
 

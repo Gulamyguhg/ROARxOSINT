@@ -3,18 +3,19 @@ import re
 import logging
 import json
 import requests
+import threading
+import http.server
+import socketserver
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ConversationHandler, ContextTypes
 
-# ========== HELPER: Remove ALL whitespace (space, newline, tab, etc.) ==========
+# ========== CLEAN TOKEN ==========
 def clean_whitespace(value):
-    """Remove all whitespace characters from a string."""
     return re.sub(r'\s+', '', value) if value else ""
 
-# ========== READ FROM ENVIRONMENT VARIABLES (with aggressive cleaning) ==========
 BOT_TOKEN = clean_whitespace(os.getenv("BOT_TOKEN", ""))
 if not BOT_TOKEN:
-    raise ValueError("BOT_TOKEN environment variable missing or empty!")
+    raise ValueError("BOT_TOKEN environment variable missing!")
 
 API_BASE = clean_whitespace(os.getenv("API_URL", "https://bronx-web-api.onrender.com/api/key-bronx"))
 TG_API_URL = clean_whitespace(os.getenv("TG_API_URL", "https://bronx-web-api.onrender.com/api/custom/telegram-scan"))
@@ -24,17 +25,16 @@ AADHAAR_KEY = clean_whitespace(os.getenv("AADHAAR_KEY", "KEY"))
 VEHICLE_KEY = clean_whitespace(os.getenv("VEHICLE_KEY", "tg-99"))
 TG_KEY = clean_whitespace(os.getenv("TG_KEY", "tg-99"))
 
-# Build endpoints
 PHONE_API = f"{API_BASE}/numleak"
 AADHAAR_API = f"{API_BASE}/aadhar"
 VEHICLE_API = f"{API_BASE}/veh2num"
 
-# Conversation states
 PHONE, AADHAAR, VEHICLE, TG_USERNAME = range(4)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# ========== API CALLS ==========
 def call_api(url, params):
     try:
         resp = requests.get(url, params=params, timeout=20)
@@ -66,6 +66,7 @@ def format_result(data, title):
     result = data.get("data", data)
     return f"✅ {title} result:\n```json\n{json.dumps(result, indent=2)}\n```"
 
+# ========== BOT HANDLERS ==========
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         ["📱 Phone Lookup", "🆔 Aadhaar Verification"],
@@ -137,7 +138,26 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Cancelled.", reply_markup=ReplyKeyboardRemove())
     return ConversationHandler.END
 
+# ========== SIMPLE HTTP SERVER (to keep Render happy) ==========
+class HealthCheckHandler(http.server.SimpleHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"OK")
+
+def start_http_server():
+    port = int(os.environ.get("PORT", 10000))
+    with socketserver.TCPServer(("0.0.0.0", port), HealthCheckHandler) as httpd:
+        logger.info(f"✅ Health check server running on port {port}")
+        httpd.serve_forever()
+
+# ========== MAIN ==========
 def main():
+    # Start HTTP server in a background thread
+    http_thread = threading.Thread(target=start_http_server, daemon=True)
+    http_thread.start()
+
+    # Build and run Telegram bot
     app = Application.builder().token(BOT_TOKEN).build()
     conv = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
@@ -151,7 +171,8 @@ def main():
     )
     app.add_handler(conv)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_selection))
-    logger.info("Bot is running...")
+    
+    logger.info("🚀 Bot is starting...")
     app.run_polling()
 
 if __name__ == "__main__":

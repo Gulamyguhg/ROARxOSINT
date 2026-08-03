@@ -1,27 +1,35 @@
 import os
+import re
 import logging
 import json
 import requests
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ConversationHandler, ContextTypes
 
-# ========== READ FROM ENVIRONMENT VARIABLES (FIXED .strip()) ==========
-BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()   # <-- YAHAN .strip() ADD KIYA
+# ========== HELPER: Remove ALL whitespace (space, newline, tab, etc.) ==========
+def clean_whitespace(value):
+    """Remove all whitespace characters from a string."""
+    return re.sub(r'\s+', '', value) if value else ""
+
+# ========== READ FROM ENVIRONMENT VARIABLES (with aggressive cleaning) ==========
+BOT_TOKEN = clean_whitespace(os.getenv("BOT_TOKEN", ""))
 if not BOT_TOKEN:
-    raise ValueError("BOT_TOKEN environment variable missing!")
+    raise ValueError("BOT_TOKEN environment variable missing or empty!")
 
-API_BASE = os.getenv("API_URL", "https://bronx-web-api.onrender.com/api/key-bronx")
-TG_API_URL = os.getenv("TG_API_URL", "https://bronx-web-api.onrender.com/api/custom/telegram-scan")
+API_BASE = clean_whitespace(os.getenv("API_URL", "https://bronx-web-api.onrender.com/api/key-bronx"))
+TG_API_URL = clean_whitespace(os.getenv("TG_API_URL", "https://bronx-web-api.onrender.com/api/custom/telegram-scan"))
 
-PHONE_KEY = os.getenv("PHONE_KEY", "tg-99").strip()
-AADHAAR_KEY = os.getenv("AADHAAR_KEY", "KEY").strip()
-VEHICLE_KEY = os.getenv("VEHICLE_KEY", "tg-99").strip()
-TG_KEY = os.getenv("TG_KEY", "tg-99").strip()
+PHONE_KEY = clean_whitespace(os.getenv("PHONE_KEY", "tg-99"))
+AADHAAR_KEY = clean_whitespace(os.getenv("AADHAAR_KEY", "KEY"))
+VEHICLE_KEY = clean_whitespace(os.getenv("VEHICLE_KEY", "tg-99"))
+TG_KEY = clean_whitespace(os.getenv("TG_KEY", "tg-99"))
 
+# Build endpoints
 PHONE_API = f"{API_BASE}/numleak"
 AADHAAR_API = f"{API_BASE}/aadhar"
 VEHICLE_API = f"{API_BASE}/veh2num"
 
+# Conversation states
 PHONE, AADHAAR, VEHICLE, TG_USERNAME = range(4)
 
 logging.basicConfig(level=logging.INFO)

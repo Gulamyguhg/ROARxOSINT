@@ -1,353 +1,157 @@
-import requests
+import os
+import logging
 import json
-import time
+import requests
+from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ConversationHandler, ContextTypes
 
-# ==========================================
-# CONFIGURATION
-# ==========================================
+# ========== READ FROM RAILWAY ENVIRONMENT VARIABLES ==========
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+if not BOT_TOKEN:
+    raise ValueError("BOT_TOKEN environment variable is not set!")
 
-BOT_TOKEN = "8895631051:AAG93LsbEzPwJ8mb4NkHWc0NFNBKjK-zO5g"
+API_BASE = os.getenv("API_URL", "https://bronx-web-api.onrender.com/api/key-bronx")
+TG_API_URL = os.getenv("TG_API_URL", "https://bronx-web-api.onrender.com/api/custom/telegram-scan")
 
-PHONE_API_URL = "http://uersxinfo.in/api?key=demoapi&type=veh_all_info&term=uk04ag9781"
-AADHAAR_API_URL = "exploitsindia.site/osintanishexploits/api.php?key=SHUBHxANISH&type=aadhaar&aadhaar=962397300673"
+# API Keys (Inko Railway par set karna hoga)
+PHONE_KEY = os.getenv("PHONE_KEY", "tg-99")
+AADHAAR_KEY = os.getenv("AADHAAR_KEY", "KEY")
+VEHICLE_KEY = os.getenv("VEHICLE_KEY", "tg-99")
+TG_KEY = os.getenv("TG_KEY", "tg-99")
 
-# Dummy HTTPS server URL
-DUMMY_HTTPS_SERVER = ""
+# Build Endpoints
+PHONE_API = f"{API_BASE}/numleak"
+AADHAAR_API = f"{API_BASE}/aadhar"
+VEHICLE_API = f"{API_BASE}/veh2num"
 
-TELEGRAM_API = "https://api.telegram.org/bot" + BOT_TOKEN
+# Conversation States
+PHONE, AADHAAR, VEHICLE, TG_USERNAME = range(4)
 
+# ========== LOGGING ==========
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# ==========================================
-# TELEGRAM API
-# ==========================================
-
-def send_message(chat_id, text, keyboard=None):
-    url = TELEGRAM_API + "/sendMessage"
-
-    data = {
-        "chat_id": chat_id,
-        "text": text,
-        "parse_mode": "HTML"
-    }
-
-    if keyboard is not None:
-        data["reply_markup"] = json.dumps(keyboard)
-
+# ========== API CALLS ==========
+def call_api(url, params):
     try:
-        requests.post(
-            url,
-            data=data,
-            timeout=15
-        )
-    except requests.RequestException:
-        pass
-
-
-def get_updates(offset):
-    url = TELEGRAM_API + "/getUpdates"
-
-    params = {
-        "offset": offset,
-        "timeout": 25
-    }
-
-    try:
-        response = requests.get(
-            url,
-            params=params,
-            timeout=30
-        )
-
-        return response.json()
-
-    except (requests.RequestException, ValueError):
-        return {
-            "ok": False,
-            "result": []
-        }
-
-
-# ==========================================
-# KEYBOARD
-# ==========================================
-
-MAIN_KEYBOARD = {
-    "keyboard": [
-        [
-            {
-                "text": "📱 Phone Lookup"
-            }
-        ],
-        [
-            {
-                "text": "🪪 Aadhaar Verification"
-            }
-        ]
-    ],
-    "resize_keyboard": True,
-    "one_time_keyboard": False
-}
-
-
-# ==========================================
-# PHONE API
-# ==========================================
-
-def phone_lookup(number):
-
-    if not PHONE_API_URL:
-        return {
-            "success": False,
-            "error": "Phone verification API is not configured."
-        }
-
-    try:
-        response = requests.get(
-            PHONE_API_URL,
-            params={
-                "phone": number
-            },
-            timeout=20
-        )
-
+        resp = requests.get(url, params=params, timeout=20)
+        if resp.status_code != 200:
+            return {"success": False, "error": f"HTTP {resp.status_code}", "body": resp.text}
         try:
-            return response.json()
+            return resp.json()
+        except:
+            return {"success": False, "error": "Invalid JSON", "body": resp.text}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
-        except ValueError:
-            return {
-                "success": False,
-                "error": "API did not return valid JSON."
-            }
+def phone_lookup(num):
+    return call_api(PHONE_API, {"key": PHONE_KEY, "num": num})
 
-    except requests.RequestException as error:
-        return {
-            "success": False,
-            "error": "API request failed.",
-            "details": str(error)
-        }
+def aadhaar_lookup(num):
+    return call_api(AADHAAR_API, {"key": AADHAAR_KEY, "num": num})
 
+def vehicle_lookup(vehicle):
+    return call_api(VEHICLE_API, {"key": VEHICLE_KEY, "vehicle": vehicle.upper()})
 
-# ==========================================
-# AADHAAR VERIFICATION API
-# ==========================================
+def telegram_lookup(username):
+    return call_api(TG_API_URL, {"key": TG_KEY, "id": username})
 
-def aadhaar_verify(aadhaar):
+# ========== FORMAT ==========
+def format_result(data, title):
+    if not data.get("success", False):
+        error = data.get("error", "Unknown error")
+        return f"❌ {title} failed:\n{error}"
+    result = data.get("data", data)
+    return f"✅ {title} result:\n```json\n{json.dumps(result, indent=2)}\n```"
 
-    if not AADHAAR_API_URL:
-        return {
-            "success": False,
-            "error": "Authorized Aadhaar verification API is not configured."
-        }
-
-    try:
-        response = requests.get(
-            AADHAAR_API_URL,
-            params={
-                "aadhaar": aadhaar
-            },
-            timeout=20
-        )
-
-        try:
-            return response.json()
-
-        except ValueError:
-            return {
-                "success": False,
-                "error": "API did not return valid JSON."
-            }
-
-    except requests.RequestException as error:
-        return {
-            "success": False,
-            "error": "Verification request failed.",
-            "details": str(error)
-        }
-
-
-# ==========================================
-# JSON FORMATTER
-# ==========================================
-
-def format_json(data):
-
-    formatted = json.dumps(
-        data,
-        indent=4,
-        ensure_ascii=False
+# ========== BOT HANDLERS ==========
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [
+        ["📱 Phone Lookup", "🆔 Aadhaar Verification"],
+        ["🚗 Vehicle Lookup", "📡 Telegram Scan"]
+    ]
+    await update.message.reply_text(
+        "Welcome! Choose an option:",
+        reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     )
+    return ConversationHandler.END
 
-    # Telegram HTML safety
-    formatted = (
-        formatted
-        .replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-    )
+async def menu_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
+    if "Phone" in text:
+        await update.message.reply_text("📱 Send 10-digit number:")
+        return PHONE
+    elif "Aadhaar" in text:
+        await update.message.reply_text("🆔 Send 12-digit Aadhaar:")
+        return AADHAAR
+    elif "Vehicle" in text:
+        await update.message.reply_text("🚗 Send vehicle number (e.g. KL41V3504):")
+        return VEHICLE
+    elif "Telegram" in text:
+        await update.message.reply_text("📡 Send username (without @):")
+        return TG_USERNAME
+    return ConversationHandler.END
 
-    return "<pre>" + formatted + "</pre>"
+async def handle_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    num = update.message.text.strip()
+    if not num.isdigit() or len(num) != 10:
+        await update.message.reply_text("❌ Invalid 10-digit number.")
+        return PHONE
+    await update.message.reply_text("⏳ Processing...")
+    result = phone_lookup(num)
+    await update.message.reply_text(format_result(result, "Phone"), parse_mode="Markdown")
+    return ConversationHandler.END
 
+async def handle_aadhaar(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    num = update.message.text.strip()
+    if not num.isdigit() or len(num) != 12:
+        await update.message.reply_text("❌ Invalid 12-digit Aadhaar.")
+        return AADHAAR
+    await update.message.reply_text("⏳ Processing...")
+    result = aadhaar_lookup(num)
+    await update.message.reply_text(format_result(result, "Aadhaar"), parse_mode="Markdown")
+    return ConversationHandler.END
 
-# ==========================================
-# MAIN BOT
-# ==========================================
+async def handle_vehicle(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    veh = update.message.text.strip()
+    if len(veh) < 4:
+        await update.message.reply_text("❌ Invalid vehicle number.")
+        return VEHICLE
+    await update.message.reply_text("⏳ Processing...")
+    result = vehicle_lookup(veh)
+    await update.message.reply_text(format_result(result, "Vehicle"), parse_mode="Markdown")
+    return ConversationHandler.END
+
+async def handle_tg(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    username = update.message.text.strip().lstrip('@')
+    if not username:
+        await update.message.reply_text("❌ Invalid username.")
+        return TG_USERNAME
+    await update.message.reply_text("⏳ Processing...")
+    result = telegram_lookup(username)
+    await update.message.reply_text(format_result(result, "Telegram Scan"), parse_mode="Markdown")
+    return ConversationHandler.END
+
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Cancelled.", reply_markup=ReplyKeyboardRemove())
+    return ConversationHandler.END
 
 def main():
-
-    offset = 0
-    mode = {}
-
-    print("Bot started...")
-
-    while True:
-
-        updates = get_updates(offset)
-
-        if not updates.get("ok"):
-            time.sleep(2)
-            continue
-
-        for update in updates.get("result", []):
-
-            offset = update["update_id"] + 1
-
-            message = update.get("message")
-
-            if not message:
-                continue
-
-            chat_id = message["chat"]["id"]
-
-            text = message.get("text", "").strip()
-
-            # ==================================
-            # /start
-            # ==================================
-
-            if text == "/start":
-
-                mode[chat_id] = None
-
-                send_message(
-                    chat_id,
-                    "👋 <b>Welcome!</b>\n\n"
-                    "Select an option below:",
-                    MAIN_KEYBOARD
-                )
-
-                continue
-
-            # ==================================
-            # PHONE BUTTON
-            # ==================================
-
-            if text == "📱 Phone Lookup":
-
-                mode[chat_id] = "phone"
-
-                send_message(
-                    chat_id,
-                    "📞 Send 10 digit mobile number:"
-                )
-
-                continue
-
-            # ==================================
-            # AADHAAR BUTTON
-            # ==================================
-
-            if text == "🪪 Aadhaar Verification":
-
-                mode[chat_id] = "aadhaar"
-
-                send_message(
-                    chat_id,
-                    "🪪 Send 12 digit Aadhaar number for "
-                    "authorized verification:"
-                )
-
-                continue
-
-            # ==================================
-            # PHONE MODE
-            # ==================================
-
-            if mode.get(chat_id) == "phone":
-
-                if not text.isdigit() or len(text) != 10:
-
-                    send_message(
-                        chat_id,
-                        "❌ <b>Invalid mobile number.</b>\n\n"
-                        "Please send exactly 10 numeric digits."
-                    )
-
-                    continue
-
-                send_message(
-                    chat_id,
-                    "⏳ Processing..."
-                )
-
-                result = phone_lookup(text)
-
-                send_message(
-                    chat_id,
-                    format_json(result)
-                )
-
-                mode[chat_id] = None
-
-                continue
-
-            # ==================================
-            # AADHAAR MODE
-            # ==================================
-
-            if mode.get(chat_id) == "aadhaar":
-
-                if not text.isdigit() or len(text) != 12:
-
-                    send_message(
-                        chat_id,
-                        "❌ <b>Invalid Aadhaar format.</b>\n\n"
-                        "Please enter exactly 12 numeric digits."
-                    )
-
-                    continue
-
-                send_message(
-                    chat_id,
-                    "⏳ Verifying..."
-                )
-
-                result = aadhaar_verify(text)
-
-                send_message(
-                    chat_id,
-                    format_json(result)
-                )
-
-                mode[chat_id] = None
-
-                continue
-
-            # ==================================
-            # UNKNOWN MESSAGE
-            # ==================================
-
-            send_message(
-                chat_id,
-                "❓ Please use /start and select an option.",
-                MAIN_KEYBOARD
-            )
-
-        time.sleep(1)
-
-
-# ==========================================
-# START
-# ==========================================
+    app = Application.builder().token(BOT_TOKEN).build()
+    conv = ConversationHandler(
+        entry_points=[CommandHandler("start", start)],
+        states={
+            PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_phone)],
+            AADHAAR: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_aadhaar)],
+            VEHICLE: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_vehicle)],
+            TG_USERNAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_tg)],
+        },
+        fallbacks=[CommandHandler("cancel", cancel)],
+    )
+    app.add_handler(conv)
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_selection))
+    logger.info("Bot is running...")
+    app.run_polling()
 
 if __name__ == "__main__":
     main()

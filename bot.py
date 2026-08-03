@@ -1,39 +1,38 @@
-import logging
 import os
+import logging
 import json
 import requests
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
-from telegram.ext import (
-    Application,
-    CommandHandler,
-    MessageHandler,
-    filters,
-    ConversationHandler,
-    ContextTypes,
-)
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ConversationHandler, ContextTypes
 
-# ========== READ FROM ENVIRONMENT (WITH .strip() TO REMOVE SPACES/NEWLINES) ==========
-BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
+# ========== READ FROM RAILWAY VARIABLES ==========
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
-    raise ValueError("BOT_TOKEN not set")
+    raise ValueError("BOT_TOKEN environment variable missing!")
 
-API_BASE = os.getenv("API_URL", "https://bronx-web-api.onrender.com/api/key-bronx").strip()
-TG_API_URL = os.getenv("TG_API_URL", "https://bronx-web-api.onrender.com/api/custom/telegram-scan").strip()
+# API Base URLs (in case not set, use your provided ones)
+API_BASE = os.getenv("API_URL", "https://bronx-web-api.onrender.com/api/key-bronx")
+TG_API_URL = os.getenv("TG_API_URL", "https://bronx-web-api.onrender.com/api/custom/telegram-scan")
 
-PHONE_KEY = os.getenv("PHONE_KEY", "tg-99").strip()
-AADHAAR_KEY = os.getenv("AADHAAR_KEY", "KEY").strip()
-VEHICLE_KEY = os.getenv("VEHICLE_KEY", "tg-99").strip()
-TG_KEY = os.getenv("TG_KEY", "tg-99").strip()
+# API Keys – with fallback to your sample keys (replace if expired)
+PHONE_KEY = os.getenv("PHONE_KEY", "tg-99")
+AADHAAR_KEY = os.getenv("AADHAAR_KEY", "KEY")
+VEHICLE_KEY = os.getenv("VEHICLE_KEY", "tg-99")
+TG_KEY = os.getenv("TG_KEY", "tg-99")
 
+# Build full endpoints
 PHONE_API = f"{API_BASE}/numleak"
 AADHAAR_API = f"{API_BASE}/aadhar"
 VEHICLE_API = f"{API_BASE}/veh2num"
 
-SELECTING_ACTION, PHONE, AADHAAR, VEHICLE, TG_USERNAME = range(5)
+# Conversation states
+PHONE, AADHAAR, VEHICLE, TG_USERNAME = range(4)
 
+# ========== LOGGING ==========
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# ========== API CALLERS ==========
 def call_api(url, params):
     try:
         resp = requests.get(url, params=params, timeout=20)
@@ -41,7 +40,7 @@ def call_api(url, params):
             return {"success": False, "error": f"HTTP {resp.status_code}", "body": resp.text}
         try:
             return resp.json()
-        except Exception:
+        except:
             return {"success": False, "error": "Invalid JSON", "body": resp.text}
     except Exception as e:
         return {"success": False, "error": str(e)}
@@ -58,6 +57,7 @@ def vehicle_lookup(vehicle):
 def telegram_lookup(username):
     return call_api(TG_API_URL, {"key": TG_KEY, "id": username})
 
+# ========== FORMAT RESULTS ==========
 def format_result(data, title):
     if not data.get("success", False):
         error = data.get("error", "Unknown error")
@@ -65,6 +65,7 @@ def format_result(data, title):
     result = data.get("data", data)
     return f"✅ {title} result:\n```json\n{json.dumps(result, indent=2)}\n```"
 
+# ========== BOT HANDLERS ==========
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         ["📱 Phone Lookup", "🆔 Aadhaar Verification"],
@@ -74,7 +75,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Welcome! Choose an option:",
         reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     )
-    return SELECTING_ACTION
+    return ConversationHandler.END
 
 async def menu_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
@@ -82,7 +83,7 @@ async def menu_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("📱 Send 10-digit number:")
         return PHONE
     elif "Aadhaar" in text:
-        await update.message.reply_text("🆔 Send 12-digit number:")
+        await update.message.reply_text("🆔 Send 12-digit Aadhaar:")
         return AADHAAR
     elif "Vehicle" in text:
         await update.message.reply_text("🚗 Send vehicle number (e.g. KL41V3504):")
@@ -90,14 +91,12 @@ async def menu_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif "Telegram" in text:
         await update.message.reply_text("📡 Send username (without @):")
         return TG_USERNAME
-    else:
-        await update.message.reply_text("❌ Please select a valid option from the menu.")
-        return SELECTING_ACTION
+    return ConversationHandler.END
 
 async def handle_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     num = update.message.text.strip()
     if not num.isdigit() or len(num) != 10:
-        await update.message.reply_text("❌ Invalid 10-digit number. Try again:")
+        await update.message.reply_text("❌ Invalid 10-digit number.")
         return PHONE
     await update.message.reply_text("⏳ Processing...")
     result = phone_lookup(num)
@@ -107,7 +106,7 @@ async def handle_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_aadhaar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     num = update.message.text.strip()
     if not num.isdigit() or len(num) != 12:
-        await update.message.reply_text("❌ Invalid 12-digit number. Try again:")
+        await update.message.reply_text("❌ Invalid 12-digit Aadhaar.")
         return AADHAAR
     await update.message.reply_text("⏳ Processing...")
     result = aadhaar_lookup(num)
@@ -117,7 +116,7 @@ async def handle_aadhaar(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_vehicle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     veh = update.message.text.strip()
     if len(veh) < 4:
-        await update.message.reply_text("❌ Invalid vehicle number. Try again:")
+        await update.message.reply_text("❌ Invalid vehicle number.")
         return VEHICLE
     await update.message.reply_text("⏳ Processing...")
     result = vehicle_lookup(veh)
@@ -127,7 +126,7 @@ async def handle_vehicle(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_tg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = update.message.text.strip().lstrip('@')
     if not username:
-        await update.message.reply_text("❌ Invalid username. Try again:")
+        await update.message.reply_text("❌ Invalid username.")
         return TG_USERNAME
     await update.message.reply_text("⏳ Processing...")
     result = telegram_lookup(username)
@@ -140,11 +139,9 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
-    
-    conv_handler = ConversationHandler(
+    conv = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
         states={
-            SELECTING_ACTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, menu_selection)],
             PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_phone)],
             AADHAAR: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_aadhaar)],
             VEHICLE: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_vehicle)],
@@ -152,8 +149,8 @@ def main():
         },
         fallbacks=[CommandHandler("cancel", cancel)],
     )
-    
-    app.add_handler(conv_handler)
+    app.add_handler(conv)
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_selection))
     logger.info("Bot is running...")
     app.run_polling()
 
